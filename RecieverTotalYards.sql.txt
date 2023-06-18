@@ -1,0 +1,16 @@
+select
+	sum("Yards") filter (
+	where johnny_williams."Reciever" = 'boyd') "Body",
+	sum("Yards") filter (
+	where johnny_williams."Reciever" = 'chase') "Chase",
+	sum("Yards") filter (
+	where johnny_williams."Reciever" = 'higgins') "Higgins",
+	concat(count(distinct("Week")) filter (
+	where johnny_williams."Result" = 'Win'),
+	'-',
+	count(distinct("Week")) filter (
+	where johnny_williams."Result" = 'Loss')
+       )
+Results
+from
+	johnny_williams

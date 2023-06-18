@@ -1,0 +1,72 @@
+import pandas as pd
+from sqlalchemy import create_engine
+
+
+
+
+def connectDB(db_url):
+    engine = create_engine("postgresql://johnny_williams:wohnnyjilliams@3.208.43.166/postgres")
+    con = engine.connect()
+    return con
+
+
+def loadDBTransformedData(dfTransformedData, DbTargetTable, DBConnection):
+    dfTransformedData.to_sql(name=DbTargetTable,con=DBConnection,if_exists='replace')
+    DBConnection.commit()
+    DBConnection.close()
+
+
+def extract_MindexCSV(source_file):
+    print('Extracted csv in DataFrame')
+    dfExtracted_MindexCSV = pd.read_csv(source_file)
+    return dfExtracted_MindexCSV
+
+def transform_MindexTeamdf(source_df):
+    print('Transforming Team csv in DataFrame')
+    source_df['Result'] = source_df['Result'].mask(source_df['Result'].eq(1), 'Win')
+    source_df['Result'] = source_df['Result'].mask(source_df['Result'].eq(0), 'Loss')
+    source_df['Result'] = source_df['Result'].mask(source_df['Result'].isnull(), 'Na')
+    source_df['Opponent'] = source_df['Opponent'].mask(source_df['Opponent'].isnull(), 'Na-BiWeek')
+    source_df['Location'] = source_df['Opponent'].mask(source_df['Opponent'].isnull(), 'Na')
+    return source_df
+
+def transform_MindexPlayerdf(source_player, source_playerdf,source_teamdf):
+    source_playerdf['Reciever'] = pd.Series([source_player for x in range(len(source_playerdf.index))])
+    source_playerdf['RecieverPlayered'] = pd.Series([source_player for x in range(len(source_playerdf.index))])
+    
+    for weekVar in source_teamdf['Week']:
+        if not (weekVar in source_playerdf['Week'].values):
+            source_playerdf.loc[len(source_playerdf.index)] = [weekVar, '0', '0', source_player,'NOT-PLAYED']
+   
+    return source_playerdf
+
+def PerformMindexTeamPlayerETL():
+    MindexTeamS3FileName = 'bengals.csv'
+    MindexS3Filelist = ['boyd', 'chase', 'higgins']
+    MindexS3FileFldr = 'C:/Users/18134/Downloads/'
+    MindexS3FileExt = '_receiving.csv'
+    MindexS3FileName = ' '
+
+    dfTeamS3FileName = MindexS3FileFldr + MindexTeamS3FileName
+    dfPlayerCombinedS3Files = pd.DataFrame()
+
+    dfTeam = extract_MindexCSV(dfTeamS3FileName)
+    dfTeam = transform_MindexTeamdf(dfTeam)
+    dbURL = "postgresql://johnny_williams:wohnnyjilliams@3.208.43.166/postgres"
+    dbTransformedTargetTbl = 'johnny_williams'
+
+    for S3File in MindexS3Filelist:
+        MindexS3FileName = MindexS3FileFldr + S3File + MindexS3FileExt
+        dfPlayer = extract_MindexCSV(MindexS3FileName)
+        dfPlayer = transform_MindexPlayerdf(S3File,dfPlayer,dfTeam)        
+        dfPlayerCombinedS3Files = pd.concat([dfPlayerCombinedS3Files, dfPlayer])
+
+    dfTransformedTeamPlayer = pd.merge(dfPlayerCombinedS3Files, dfTeam, on='Week', how='outer')
+    dfTransformedTeamPlayer.to_csv(MindexS3FileFldr + 'OutterCombinedFiles.csv', index=False)
+    dfTransformedTeamPlayer['Yards'] = pd.to_numeric(dfTransformedTeamPlayer['Yards'])
+
+    conDB = connectDB(dbURL)
+    loadDBTransformedData(dfTransformedTeamPlayer, dbTransformedTargetTbl, conDB )
+    
+
+PerformMindexTeamPlayerETL()
