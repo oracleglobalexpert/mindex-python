@@ -1,8 +1,22 @@
+import boto3
 import pandas as pd
 from sqlalchemy import create_engine
 
+def DownloadS3Files():
+  FileList = ['bengals.csv','chase_receiving.csv','boyd_receiving.csv','higgins_receiving.csv']
+  s3_client = boto3.client('s3')
 
+  for file_name in FileList:
+   full_file_name = 'C:/Users/18134/Downloads/' + file_name
+   with open(full_file_name, 'wb') as file:
 
+      s3_client.download_fileobj(
+          Bucket='mindex-data-analytics-code-challenge',
+          Key=file_name,
+          Fileobj=file
+      )
+
+      file.close()
 
 def connectDB(db_url):
     engine = create_engine("postgresql://johnny_williams:wohnnyjilliams@3.208.43.166/postgres")
@@ -55,6 +69,8 @@ def PerformMindexTeamPlayerETL():
     dbURL = "postgresql://johnny_williams:wohnnyjilliams@3.208.43.166/postgres"
     dbTransformedTargetTbl = 'johnny_williams'
 
+    DownloadS3Files()
+
     for S3File in MindexS3Filelist:
         MindexS3FileName = MindexS3FileFldr + S3File + MindexS3FileExt
         dfPlayer = extract_MindexCSV(MindexS3FileName)
@@ -68,5 +84,4 @@ def PerformMindexTeamPlayerETL():
     conDB = connectDB(dbURL)
     loadDBTransformedData(dfTransformedTeamPlayer, dbTransformedTargetTbl, conDB )
     
-
 PerformMindexTeamPlayerETL()
